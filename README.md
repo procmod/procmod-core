@@ -1,30 +1,5 @@
 <p align="center">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <rect width="256" height="256" rx="16" fill="#111"/>
-  <!-- memory grid - representing addressable memory blocks -->
-  <rect x="40" y="40" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="76" y="40" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="112" y="40" width="28" height="28" rx="4" fill="#f97316"/>
-  <rect x="148" y="40" width="28" height="28" rx="4" fill="#f97316"/>
-  <rect x="184" y="40" width="28" height="28" rx="4" fill="#334155"/>
-
-  <rect x="40" y="76" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="76" y="76" width="28" height="28" rx="4" fill="#38bdf8"/>
-  <rect x="112" y="76" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="148" y="76" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="184" y="76" width="28" height="28" rx="4" fill="#38bdf8"/>
-
-  <rect x="40" y="112" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="76" y="112" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="112" y="112" width="28" height="28" rx="4" fill="#334155"/>
-  <rect x="148" y="112" width="28" height="28" rx="4" fill="#a78bfa"/>
-  <rect x="184" y="112" width="28" height="28" rx="4" fill="#334155"/>
-
-  <!-- probe arrow pointing into the grid -->
-  <line x1="64" y1="216" x2="126" y2="154" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="126" cy="154" r="5" fill="#f97316"/>
-  <circle cx="54" cy="226" r="6" fill="#f97316"/>
-</svg>
+<img src="logo.svg" width="256" height="256" alt="procmod-core">
 </p>
 
 <h1 align="center">procmod-core</h1>
