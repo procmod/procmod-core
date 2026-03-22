@@ -140,6 +140,20 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
         });
     }
 
+    if (out_size as usize) != buf.len() {
+        return Err(Error::ReadFailed {
+            address,
+            source: std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "partial read: expected {} bytes, got {}",
+                    buf.len(),
+                    out_size
+                ),
+            ),
+        });
+    }
+
     Ok(())
 }
 

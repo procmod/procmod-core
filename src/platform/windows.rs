@@ -8,7 +8,8 @@ use windows_sys::Win32::System::Memory::{
     PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_READONLY, PAGE_READWRITE, PAGE_WRITECOPY,
 };
 use windows_sys::Win32::System::ProcessStatus::{
-    EnumProcessModulesEx, GetModuleBaseNameW, GetModuleInformation, LIST_MODULES_ALL, MODULEINFO,
+    EnumProcessModulesEx, GetModuleBaseNameW, GetModuleFileNameExW, GetModuleInformation,
+    LIST_MODULES_ALL, MODULEINFO,
 };
 use windows_sys::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
@@ -87,6 +88,20 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
         });
     }
 
+    if bytes_read != buf.len() {
+        return Err(Error::ReadFailed {
+            address,
+            source: std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "partial read: expected {} bytes, got {}",
+                    buf.len(),
+                    bytes_read
+                ),
+            ),
+        });
+    }
+
     Ok(())
 }
 
@@ -110,6 +125,20 @@ pub fn write_bytes(handle: &ProcessHandle, address: usize, buf: &[u8]) -> Result
         return Err(Error::WriteFailed {
             address,
             source: std::io::Error::last_os_error(),
+        });
+    }
+
+    if bytes_written != buf.len() {
+        return Err(Error::WriteFailed {
+            address,
+            source: std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                format!(
+                    "partial write: expected {} bytes, wrote {}",
+                    buf.len(),
+                    bytes_written
+                ),
+            ),
         });
     }
 
@@ -240,11 +269,27 @@ pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
             (0, 0)
         };
 
+        let mut path_buf = [0u16; 260];
+        let path_len = unsafe {
+            GetModuleFileNameExW(
+                handle.handle,
+                h_module,
+                path_buf.as_mut_ptr(),
+                path_buf.len() as u32,
+            )
+        };
+
+        let path = if path_len > 0 {
+            String::from_utf16_lossy(&path_buf[..path_len as usize])
+        } else {
+            name.clone()
+        };
+
         modules.push(Module {
-            name: name.clone(),
+            name,
             base,
             size,
-            path: name,
+            path,
         });
     }
 

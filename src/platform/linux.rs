@@ -44,6 +44,16 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
         });
     }
 
+    if (result as usize) != buf.len() {
+        return Err(Error::ReadFailed {
+            address,
+            source: std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!("partial read: expected {} bytes, got {}", buf.len(), result),
+            ),
+        });
+    }
+
     Ok(())
 }
 
@@ -70,6 +80,20 @@ pub fn write_bytes(handle: &ProcessHandle, address: usize, buf: &[u8]) -> Result
         });
     }
 
+    if (result as usize) != buf.len() {
+        return Err(Error::WriteFailed {
+            address,
+            source: std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                format!(
+                    "partial write: expected {} bytes, wrote {}",
+                    buf.len(),
+                    result
+                ),
+            ),
+        });
+    }
+
     Ok(())
 }
 
@@ -82,13 +106,13 @@ fn parse_protection(perms: &str) -> Protection {
     }
 }
 
-fn read_maps(pid: i32) -> Result<String> {
+fn read_maps(pid: i32) -> std::result::Result<String, std::io::Error> {
     let path = format!("/proc/{}/maps", pid);
-    std::fs::read_to_string(&path).map_err(|e| Error::ModuleEnumFailed { source: e })
+    std::fs::read_to_string(&path)
 }
 
 pub fn regions(handle: &ProcessHandle, _pid: u32) -> Result<Vec<MemoryRegion>> {
-    let content = read_maps(handle.pid)?;
+    let content = read_maps(handle.pid).map_err(|e| Error::RegionQueryFailed { source: e })?;
     let mut result = Vec::new();
 
     for line in content.lines() {
@@ -121,7 +145,7 @@ pub fn regions(handle: &ProcessHandle, _pid: u32) -> Result<Vec<MemoryRegion>> {
 }
 
 pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
-    let content = read_maps(handle.pid)?;
+    let content = read_maps(handle.pid).map_err(|e| Error::ModuleEnumFailed { source: e })?;
 
     // group mapped file regions by path to build module entries
     let mut module_map: HashMap<String, (usize, usize)> = HashMap::new();

@@ -119,6 +119,92 @@ fn read_invalid_address() {
 }
 
 #[test]
+fn write_typed_value() {
+    let pid = std::process::id();
+    let process = match Process::attach(pid) {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: cannot attach to self");
+            return;
+        }
+    };
+
+    let mut value: u64 = 0xAAAA_BBBB_CCCC_DDDD;
+    let address = &mut value as *mut u64 as usize;
+
+    process.write(address, &0x1122_3344_5566_7788u64).unwrap();
+    assert_eq!(value, 0x1122_3344_5566_7788);
+}
+
+#[test]
+fn write_bytes_own_memory() {
+    let pid = std::process::id();
+    let process = match Process::attach(pid) {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: cannot attach to self");
+            return;
+        }
+    };
+
+    let mut data: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
+    let address = data.as_mut_ptr() as usize;
+
+    process
+        .write_bytes(address, &[0xAA, 0xBB, 0xCC, 0xDD])
+        .unwrap();
+    assert_eq!(data, [0xAA, 0xBB, 0xCC, 0xDD]);
+}
+
+#[test]
+fn write_zero_bytes() {
+    let pid = std::process::id();
+    let process = match Process::attach(pid) {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: cannot attach to self");
+            return;
+        }
+    };
+
+    process.write_bytes(0x1000, &[]).unwrap();
+}
+
+#[test]
+fn write_then_read() {
+    let pid = std::process::id();
+    let process = match Process::attach(pid) {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: cannot attach to self");
+            return;
+        }
+    };
+
+    let mut value: f32 = 0.0;
+    let address = &mut value as *mut f32 as usize;
+
+    process.write(address, &99.5f32).unwrap();
+    let read_back: f32 = unsafe { process.read(address).unwrap() };
+    assert!((read_back - 99.5).abs() < f32::EPSILON);
+}
+
+#[test]
+fn write_invalid_address() {
+    let pid = std::process::id();
+    let process = match Process::attach(pid) {
+        Ok(p) => p,
+        Err(_) => {
+            eprintln!("skipping: cannot attach to self");
+            return;
+        }
+    };
+
+    let result = process.write_bytes(0xDEAD, &[0x90]);
+    assert!(result.is_err());
+}
+
+#[test]
 fn regions_self() {
     let pid = std::process::id();
     let process = match Process::attach(pid) {
@@ -132,8 +218,15 @@ fn regions_self() {
     let regions = process.regions().unwrap();
     assert!(!regions.is_empty());
 
+    for region in &regions {
+        assert!(region.size > 0);
+    }
+
     let has_readable = regions.iter().any(|r| r.protection.read);
     assert!(has_readable);
+
+    let has_executable = regions.iter().any(|r| r.protection.execute);
+    assert!(has_executable);
 }
 
 #[test]
@@ -152,7 +245,12 @@ fn modules_self() {
 
     for module in &modules {
         assert!(module.base > 0);
+        assert!(!module.name.is_empty());
+        assert!(!module.path.is_empty());
     }
+
+    let has_nonzero_size = modules.iter().any(|m| m.size > 0);
+    assert!(has_nonzero_size);
 }
 
 #[test]
