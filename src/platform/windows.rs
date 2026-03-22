@@ -1,7 +1,8 @@
 use crate::error::{Error, Result};
 use crate::module::Module;
 use crate::region::{MemoryRegion, Protection};
-use windows_sys::Win32::Foundation::CloseHandle;
+use std::ffi::c_void;
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::Memory::{
     VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_EXECUTE, PAGE_EXECUTE_READ,
     PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_READONLY, PAGE_READWRITE, PAGE_WRITECOPY,
@@ -13,21 +14,19 @@ use windows_sys::Win32::System::Threading::{
     OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
 };
 
-type HANDLE = isize;
-
 extern "system" {
     fn ReadProcessMemory(
         process: HANDLE,
-        base_address: *const u8,
-        buffer: *mut u8,
+        base_address: *const c_void,
+        buffer: *mut c_void,
         size: usize,
         bytes_read: *mut usize,
     ) -> i32;
 
     fn WriteProcessMemory(
         process: HANDLE,
-        base_address: *const u8,
-        buffer: *const u8,
+        base_address: *mut c_void,
+        buffer: *const c_void,
         size: usize,
         bytes_written: *mut usize,
     ) -> i32;
@@ -50,7 +49,7 @@ pub fn attach(pid: u32) -> Result<ProcessHandle> {
         PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION;
     let handle = unsafe { OpenProcess(access, 0, pid) };
 
-    if handle == 0 {
+    if handle.is_null() {
         let err = std::io::Error::last_os_error();
         let raw = err.raw_os_error().unwrap_or(0);
         if raw == 5 {
@@ -74,8 +73,8 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
     let result = unsafe {
         ReadProcessMemory(
             handle.handle,
-            address as *const u8,
-            buf.as_mut_ptr(),
+            address as *const c_void,
+            buf.as_mut_ptr() as *mut c_void,
             buf.len(),
             &mut bytes_read,
         )
@@ -100,8 +99,8 @@ pub fn write_bytes(handle: &ProcessHandle, address: usize, buf: &[u8]) -> Result
     let result = unsafe {
         WriteProcessMemory(
             handle.handle,
-            address as *const u8,
-            buf.as_ptr(),
+            address as *mut c_void,
+            buf.as_ptr() as *const c_void,
             buf.len(),
             &mut bytes_written,
         )
@@ -186,7 +185,7 @@ pub fn regions(handle: &ProcessHandle, _pid: u32) -> Result<Vec<MemoryRegion>> {
 }
 
 pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
-    let mut h_modules = [0isize; 1024];
+    let mut h_modules: [HANDLE; 1024] = [std::ptr::null_mut(); 1024];
     let mut cb_needed: u32 = 0;
 
     let result = unsafe {
@@ -205,7 +204,7 @@ pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
         });
     }
 
-    let count = cb_needed as usize / std::mem::size_of::<isize>();
+    let count = cb_needed as usize / std::mem::size_of::<HANDLE>();
     let mut modules = Vec::with_capacity(count);
 
     for &h_module in &h_modules[..count] {
