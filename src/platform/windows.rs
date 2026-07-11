@@ -233,7 +233,7 @@ pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
         });
     }
 
-    let count = cb_needed as usize / std::mem::size_of::<HANDLE>();
+    let count = (cb_needed as usize / std::mem::size_of::<HANDLE>()).min(h_modules.len());
     let mut modules = Vec::with_capacity(count);
 
     for &h_module in &h_modules[..count] {

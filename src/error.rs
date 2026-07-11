@@ -41,6 +41,9 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("address arithmetic overflowed")]
+    AddressOverflow,
 }
 
 /// Result type alias for procmod-core operations.

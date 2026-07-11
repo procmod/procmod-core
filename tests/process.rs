@@ -60,10 +60,10 @@ fn read_typed_values() {
         }
     };
 
-    let f: f32 = 3.14;
+    let f: f32 = 3.125;
     let address = &f as *const f32 as usize;
     let read_f: f32 = unsafe { process.read(address).unwrap() };
-    assert!((read_f - 3.14).abs() < f32::EPSILON);
+    assert!((read_f - 3.125).abs() < f32::EPSILON);
 
     let i: i32 = -42;
     let address = &i as *const i32 as usize;
@@ -262,19 +262,19 @@ fn protection_display() {
         write: true,
         execute: true,
     };
-    assert_eq!(format!("{}", rwx), "rwx");
+    assert_eq!(format!("{rwx}"), "rwx");
 
     let r_only = Protection {
         read: true,
         write: false,
         execute: false,
     };
-    assert_eq!(format!("{}", r_only), "r--");
+    assert_eq!(format!("{r_only}"), "r--");
 
     let none = Protection {
         read: false,
         write: false,
         execute: false,
     };
-    assert_eq!(format!("{}", none), "---");
+    assert_eq!(format!("{none}"), "---");
 }
