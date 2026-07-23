@@ -1,3 +1,5 @@
+use crate::Address;
+
 /// A loaded module (shared library, executable, or dylib) in a process.
 #[derive(Debug, Clone)]
 pub struct Module {
@@ -5,7 +7,7 @@ pub struct Module {
     pub name: String,
 
     /// Base address where the module is loaded.
-    pub base: usize,
+    pub base: Address,
 
     /// Size of the module in memory (bytes).
     pub size: usize,

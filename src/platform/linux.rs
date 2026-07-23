@@ -7,7 +7,7 @@ pub struct ProcessHandle {
     pid: i32,
 }
 
-pub fn attach(pid: u32) -> Result<ProcessHandle> {
+pub fn attach(pid: u32, _access: super::Access) -> Result<ProcessHandle> {
     let native_pid = i32::try_from(pid).map_err(|_| Error::ProcessNotFound { pid })?;
     let proc_path = format!("/proc/{}", pid);
     if !std::path::Path::new(&proc_path).exists() {
@@ -187,7 +187,7 @@ pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
             let name = path.rsplit('/').next().unwrap_or(&path).to_string();
             Module {
                 name,
-                base,
+                base: crate::Address::new(base as u64),
                 size: end - base,
                 path,
             }

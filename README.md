@@ -40,8 +40,15 @@ fn main() -> procmod_core::Result<()> {
 ### Attach to a process
 
 ```rust
+// Existing read-write attachment
 let process = Process::attach(1234)?;
+
+// Capability-restricted attachment with no write methods and minimal Windows rights
+let process = Process::attach_read_only(1234)?;
+println!("target architecture: {:?}", process.architecture());
 ```
+
+A 64-bit Windows inspector can attach to a 32-bit target. Use `Address`, `Pointer32`, and `Pointer64` for target addresses rather than interpreting remote pointers as the inspector's `usize`.
 
 ### Read and write memory
 
@@ -64,12 +71,12 @@ Find where a game's main executable or a specific DLL is loaded, then scan from 
 ```rust
 let modules = process.modules()?;
 for m in &modules {
-    println!("{}: base={:#x} size={:#x}", m.name, m.base, m.size);
+    println!("{}: base={:#x} size={:#x}", m.name, m.base.value(), m.size);
 }
 
 // find a specific module
 let engine = modules.iter().find(|m| m.name == "engine.dll").unwrap();
-let scan_region = process.read_bytes(engine.base, engine.size)?;
+let scan_region = process.read_bytes_at(engine.base, engine.size)?;
 ```
 
 ### Query memory regions
@@ -92,7 +99,7 @@ let writable: Vec<_> = regions.iter().filter(|r| r.protection.write).collect();
 |----------|---------|---------------|
 | macOS | Mach VM (`mach_vm_read_overwrite` / `mach_vm_write`) | x86_64, arm64 |
 | Linux | `process_vm_readv` / `process_vm_writev` | x86_64, arm64 |
-| Windows | `ReadProcessMemory` / `WriteProcessMemory` | x86_64 |
+| Windows | `ReadProcessMemory` / `WriteProcessMemory` | x86, x86_64 targets from an x86_64 inspector |
 
 ## Permissions
 

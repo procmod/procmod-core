@@ -1,4 +1,4 @@
-use procmod_core::Process;
+use procmod_core::{Address, Architecture, Process};
 
 #[test]
 fn attach_self() {
@@ -11,6 +11,31 @@ fn attach_self() {
 fn attach_nonexistent() {
     let result = Process::attach(999_999_999);
     assert!(result.is_err());
+}
+
+#[test]
+fn attach_self_read_only() {
+    let pid = std::process::id();
+    let process = Process::attach_read_only(pid).unwrap();
+    assert_eq!(process.pid(), pid);
+
+    let value: u32 = 0xCAFE_BABE;
+    let address = Address::new(&value as *const u32 as usize as u64);
+    let read_value: u32 = unsafe { process.read_at(address).unwrap() };
+    assert_eq!(read_value, value);
+}
+
+#[test]
+fn target_addresses_validate_pointer_width() {
+    assert!(Address::new(u32::MAX as u64)
+        .validate_for(Architecture::X86)
+        .is_ok());
+    assert!(Address::new(u32::MAX as u64 + 1)
+        .validate_for(Architecture::X86)
+        .is_err());
+    assert!(Address::new(u32::MAX as u64 + 1)
+        .validate_for(Architecture::X86_64)
+        .is_ok());
 }
 
 #[test]
@@ -244,7 +269,7 @@ fn modules_self() {
     assert!(!modules.is_empty());
 
     for module in &modules {
-        assert!(module.base > 0);
+        assert!(module.base.value() > 0);
         assert!(!module.name.is_empty());
         assert!(!module.path.is_empty());
     }

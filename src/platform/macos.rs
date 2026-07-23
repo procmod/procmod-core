@@ -89,7 +89,7 @@ impl Drop for ProcessHandle {
     }
 }
 
-pub fn attach(pid: u32) -> Result<ProcessHandle> {
+pub fn attach(pid: u32, _access: super::Access) -> Result<ProcessHandle> {
     let self_port = unsafe { mach_task_self() };
     let self_pid = std::process::id();
 
@@ -267,7 +267,7 @@ pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
 
         result.push(Module {
             name,
-            base: load_address as usize,
+            base: crate::Address::new(load_address),
             size,
             path,
         });

@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use crate::module::Module;
 use crate::region::{MemoryRegion, Protection};
+use crate::Architecture;
 use std::ffi::c_void;
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::Memory::{
@@ -12,10 +13,19 @@ use windows_sys::Win32::System::ProcessStatus::{
     LIST_MODULES_ALL, MODULEINFO,
 };
 use windows_sys::Win32::System::Threading::{
-    OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
+    OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
 };
 
+const IMAGE_FILE_MACHINE_UNKNOWN: u16 = 0;
+const IMAGE_FILE_MACHINE_I386: u16 = 0x014c;
+const IMAGE_FILE_MACHINE_AMD64: u16 = 0x8664;
+const IMAGE_FILE_MACHINE_ARM64: u16 = 0xaa64;
+
 extern "system" {
+    fn IsWow64Process2(process: HANDLE, process_machine: *mut u16, native_machine: *mut u16)
+        -> i32;
+
     fn ReadProcessMemory(
         process: HANDLE,
         base_address: *const c_void,
@@ -37,6 +47,12 @@ pub struct ProcessHandle {
     handle: HANDLE,
 }
 
+#[derive(Clone, Copy)]
+pub enum Access {
+    ReadOnly,
+    ReadWrite,
+}
+
 impl Drop for ProcessHandle {
     fn drop(&mut self) {
         unsafe {
@@ -45,10 +61,14 @@ impl Drop for ProcessHandle {
     }
 }
 
-pub fn attach(pid: u32) -> Result<ProcessHandle> {
-    let access =
-        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION;
-    let handle = unsafe { OpenProcess(access, 0, pid) };
+pub fn attach(pid: u32, access: Access) -> Result<ProcessHandle> {
+    let rights = match access {
+        Access::ReadOnly => PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+        Access::ReadWrite => {
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION
+        }
+    };
+    let handle = unsafe { OpenProcess(rights, 0, pid) };
 
     if handle.is_null() {
         let err = std::io::Error::last_os_error();
@@ -63,6 +83,28 @@ pub fn attach(pid: u32) -> Result<ProcessHandle> {
     }
 
     Ok(ProcessHandle { handle })
+}
+
+pub fn architecture(handle: &ProcessHandle) -> Result<Architecture> {
+    let mut process_machine = IMAGE_FILE_MACHINE_UNKNOWN;
+    let mut native_machine = IMAGE_FILE_MACHINE_UNKNOWN;
+    if unsafe { IsWow64Process2(handle.handle, &mut process_machine, &mut native_machine) } == 0 {
+        return Err(Error::ArchitectureQueryFailed {
+            source: std::io::Error::last_os_error(),
+        });
+    }
+
+    let machine = if process_machine == IMAGE_FILE_MACHINE_UNKNOWN {
+        native_machine
+    } else {
+        process_machine
+    };
+    Ok(match machine {
+        IMAGE_FILE_MACHINE_I386 => Architecture::X86,
+        IMAGE_FILE_MACHINE_AMD64 => Architecture::X86_64,
+        IMAGE_FILE_MACHINE_ARM64 => Architecture::Arm64,
+        other => Architecture::Unknown(other),
+    })
 }
 
 pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Result<()> {
@@ -287,7 +329,7 @@ pub fn modules(handle: &ProcessHandle, _pid: u32) -> Result<Vec<Module>> {
 
         modules.push(Module {
             name,
-            base,
+            base: crate::Address::new(base as u64),
             size,
             path,
         });

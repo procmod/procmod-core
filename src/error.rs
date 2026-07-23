@@ -1,3 +1,4 @@
+use crate::Architecture;
 use thiserror::Error;
 
 /// Errors that can occur during process memory operations.
@@ -44,6 +45,18 @@ pub enum Error {
 
     #[error("address arithmetic overflowed")]
     AddressOverflow,
+
+    #[error("address {address:#x} is out of range for target architecture {architecture:?}")]
+    AddressOutOfRange {
+        address: u64,
+        architecture: Architecture,
+    },
+
+    #[error("could not determine target process architecture")]
+    ArchitectureQueryFailed {
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 /// Result type alias for procmod-core operations.
