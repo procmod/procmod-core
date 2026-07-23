@@ -135,14 +135,14 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
 
     if kr != KERN_SUCCESS {
         return Err(Error::ReadFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::from_raw_os_error(kr),
         });
     }
 
     if (out_size as usize) != buf.len() {
         return Err(Error::ReadFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
                 format!(
@@ -166,7 +166,7 @@ pub fn write_bytes(handle: &ProcessHandle, address: usize, buf: &[u8]) -> Result
 
     if kr != KERN_SUCCESS {
         return Err(Error::WriteFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::from_raw_os_error(kr),
         });
     }
@@ -206,8 +206,8 @@ pub fn regions(handle: &ProcessHandle, _pid: u32) -> Result<Vec<MemoryRegion>> {
         }
 
         result.push(MemoryRegion {
-            base: address as usize,
-            size: size as usize,
+            base: crate::Address::new(address),
+            size: usize::try_from(size).map_err(|_| Error::AddressOverflow)?,
             protection: Protection {
                 read: info.protection & VM_PROT_READ != 0,
                 write: info.protection & VM_PROT_WRITE != 0,

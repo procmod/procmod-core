@@ -1,5 +1,4 @@
 use crate::{Address, Error, Process, ReadOnly, Result};
-use sha2::{Digest, Sha256};
 
 const DOS_HEADER_SIZE: usize = 64;
 const COFF_HEADER_SIZE: usize = 24;
@@ -41,7 +40,7 @@ impl PeSection {
 
 fn invalid_data(address: Address, message: &'static str) -> Error {
     Error::ReadFailed {
-        address: usize::try_from(address.value()).unwrap_or(0),
+        address: address.value(),
         source: std::io::Error::new(std::io::ErrorKind::InvalidData, message),
     }
 }
@@ -147,63 +146,4 @@ pub fn read_mapped_pe(process: &Process<ReadOnly>, base: Address) -> Result<PeId
         relocation_size,
         sections,
     })
-}
-
-pub fn hash_mapped_section(process: &Process<ReadOnly>, section: &PeSection) -> Result<[u8; 32]> {
-    let bytes = process.read_bytes_at(section.address, section.virtual_size as usize)?;
-    Ok(Sha256::digest(bytes).into())
-}
-
-pub fn hash_canonical_section(
-    process: &Process<ReadOnly>,
-    image: &PeIdentity,
-    section: &PeSection,
-) -> Result<[u8; 32]> {
-    let mut bytes = process.read_bytes_at(section.address, section.virtual_size as usize)?;
-    if image.relocation_size == 0 {
-        return Ok(Sha256::digest(bytes).into());
-    }
-    let relocations = process.read_bytes_at(
-        image.relocation_address,
-        usize::try_from(image.relocation_size).map_err(|_| Error::AddressOverflow)?,
-    )?;
-    let delta =
-        i128::from(image.mapped_image_base.value()) - i128::from(image.preferred_image_base);
-    let section_rva = section
-        .address
-        .value()
-        .checked_sub(image.mapped_image_base.value())
-        .ok_or(Error::AddressOverflow)?;
-
-    let mut cursor = 0_usize;
-    while cursor + 8 <= relocations.len() {
-        let page_rva = u32_at(&relocations, cursor).unwrap_or(0);
-        let block_size = usize::try_from(u32_at(&relocations, cursor + 4).unwrap_or(0))
-            .map_err(|_| Error::AddressOverflow)?;
-        if block_size < 8 || cursor + block_size > relocations.len() {
-            return Err(invalid_data(
-                image.relocation_address,
-                "invalid relocation block",
-            ));
-        }
-        for entry_offset in (cursor + 8..cursor + block_size).step_by(2) {
-            let entry = u16_at(&relocations, entry_offset).unwrap_or(0);
-            if entry >> 12 != 3 {
-                continue;
-            }
-            let rva = u64::from(page_rva) + u64::from(entry & 0x0fff);
-            if rva < section_rva || rva + 4 > section_rva + u64::from(section.virtual_size) {
-                continue;
-            }
-            let offset = usize::try_from(rva - section_rva).map_err(|_| Error::AddressOverflow)?;
-            let value = u32_at(&bytes, offset)
-                .ok_or_else(|| invalid_data(section.address, "relocation exceeds section"))?;
-            let canonical = i128::from(value) - delta;
-            let canonical = u32::try_from(canonical)
-                .map_err(|_| invalid_data(section.address, "relocation value is out of range"))?;
-            bytes[offset..offset + 4].copy_from_slice(&canonical.to_le_bytes());
-        }
-        cursor += block_size;
-    }
-    Ok(Sha256::digest(bytes).into())
 }

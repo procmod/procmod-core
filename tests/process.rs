@@ -50,7 +50,7 @@ fn read_own_memory() {
     };
 
     let value: u64 = 0xDEAD_BEEF_CAFE_BABE;
-    let address = &value as *const u64 as usize;
+    let address = Address::new(&value as *const u64 as usize as u64);
 
     let read_value: u64 = unsafe { process.read(address).unwrap() };
     assert_eq!(read_value, 0xDEAD_BEEF_CAFE_BABE);
@@ -68,7 +68,7 @@ fn read_bytes_own_memory() {
     };
 
     let data: [u8; 4] = [0x11, 0x22, 0x33, 0x44];
-    let address = data.as_ptr() as usize;
+    let address = Address::new(data.as_ptr() as usize as u64);
 
     let read_data = process.read_bytes(address, 4).unwrap();
     assert_eq!(read_data, &[0x11, 0x22, 0x33, 0x44]);
@@ -86,12 +86,12 @@ fn read_typed_values() {
     };
 
     let f: f32 = 3.125;
-    let address = &f as *const f32 as usize;
+    let address = Address::new(&f as *const f32 as usize as u64);
     let read_f: f32 = unsafe { process.read(address).unwrap() };
     assert!((read_f - 3.125).abs() < f32::EPSILON);
 
     let i: i32 = -42;
-    let address = &i as *const i32 as usize;
+    let address = Address::new(&i as *const i32 as usize as u64);
     let read_i: i32 = unsafe { process.read(address).unwrap() };
     assert_eq!(read_i, -42);
 }
@@ -108,7 +108,7 @@ fn read_array() {
     };
 
     let arr: [f32; 3] = [1.0, 2.0, 3.0];
-    let address = arr.as_ptr() as usize;
+    let address = Address::new(arr.as_ptr() as usize as u64);
     let read_arr: [f32; 3] = unsafe { process.read(address).unwrap() };
     assert_eq!(read_arr, [1.0, 2.0, 3.0]);
 }
@@ -124,7 +124,7 @@ fn read_zero_bytes() {
         }
     };
 
-    let result = process.read_bytes(0x1000, 0).unwrap();
+    let result = process.read_bytes(Address::from(0x1000), 0).unwrap();
     assert!(result.is_empty());
 }
 
@@ -139,7 +139,7 @@ fn read_invalid_address() {
         }
     };
 
-    let result = process.read_bytes(0xDEAD, 4);
+    let result = process.read_bytes(Address::from(0xDEAD), 4);
     assert!(result.is_err());
 }
 
@@ -155,7 +155,7 @@ fn write_typed_value() {
     };
 
     let mut value: u64 = 0xAAAA_BBBB_CCCC_DDDD;
-    let address = &mut value as *mut u64 as usize;
+    let address = Address::new(&mut value as *mut u64 as usize as u64);
 
     process.write(address, &0x1122_3344_5566_7788u64).unwrap();
     assert_eq!(value, 0x1122_3344_5566_7788);
@@ -173,7 +173,7 @@ fn write_bytes_own_memory() {
     };
 
     let mut data: [u8; 4] = [0x00, 0x00, 0x00, 0x00];
-    let address = data.as_mut_ptr() as usize;
+    let address = Address::new(data.as_mut_ptr() as usize as u64);
 
     process
         .write_bytes(address, &[0xAA, 0xBB, 0xCC, 0xDD])
@@ -192,7 +192,7 @@ fn write_zero_bytes() {
         }
     };
 
-    process.write_bytes(0x1000, &[]).unwrap();
+    process.write_bytes(Address::from(0x1000), &[]).unwrap();
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn write_then_read() {
     };
 
     let mut value: f32 = 0.0;
-    let address = &mut value as *mut f32 as usize;
+    let address = Address::new(&mut value as *mut f32 as usize as u64);
 
     process.write(address, &99.5f32).unwrap();
     let read_back: f32 = unsafe { process.read(address).unwrap() };
@@ -225,7 +225,7 @@ fn write_invalid_address() {
         }
     };
 
-    let result = process.write_bytes(0xDEAD, &[0x90]);
+    let result = process.write_bytes(Address::from(0xDEAD), &[0x90]);
     assert!(result.is_err());
 }
 
@@ -244,6 +244,7 @@ fn regions_self() {
     assert!(!regions.is_empty());
 
     for region in &regions {
+        assert!(region.base.value() > 0);
         assert!(region.size > 0);
     }
 

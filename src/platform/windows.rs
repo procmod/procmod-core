@@ -125,14 +125,14 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
 
     if result == 0 {
         return Err(Error::ReadFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::last_os_error(),
         });
     }
 
     if bytes_read != buf.len() {
         return Err(Error::ReadFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
                 format!(
@@ -165,14 +165,14 @@ pub fn write_bytes(handle: &ProcessHandle, address: usize, buf: &[u8]) -> Result
 
     if result == 0 {
         return Err(Error::WriteFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::last_os_error(),
         });
     }
 
     if bytes_written != buf.len() {
         return Err(Error::WriteFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::new(
                 std::io::ErrorKind::WriteZero,
                 format!(
@@ -243,7 +243,7 @@ pub fn regions(handle: &ProcessHandle, _pid: u32) -> Result<Vec<MemoryRegion>> {
 
         if info.State == MEM_COMMIT {
             result.push(MemoryRegion {
-                base: info.BaseAddress as usize,
+                base: crate::Address::new(info.BaseAddress as usize as u64),
                 size: info.RegionSize,
                 protection: page_protection_to_flags(info.Protect),
             });

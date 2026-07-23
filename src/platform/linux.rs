@@ -40,14 +40,14 @@ pub fn read_bytes(handle: &ProcessHandle, address: usize, buf: &mut [u8]) -> Res
             });
         }
         return Err(Error::ReadFailed {
-            address,
+            address: address as u64,
             source: err,
         });
     }
 
     if (result as usize) != buf.len() {
         return Err(Error::ReadFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
                 format!("partial read: expected {} bytes, got {}", buf.len(), result),
@@ -76,14 +76,14 @@ pub fn write_bytes(handle: &ProcessHandle, address: usize, buf: &[u8]) -> Result
 
     if result == -1 {
         return Err(Error::WriteFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::last_os_error(),
         });
     }
 
     if (result as usize) != buf.len() {
         return Err(Error::WriteFailed {
-            address,
+            address: address as u64,
             source: std::io::Error::new(
                 std::io::ErrorKind::WriteZero,
                 format!(
@@ -132,12 +132,12 @@ pub fn regions(handle: &ProcessHandle, _pid: u32) -> Result<Vec<MemoryRegion>> {
             None => continue,
         };
 
-        let start = usize::from_str_radix(start_str, 16).unwrap_or(0);
-        let end = usize::from_str_radix(end_str, 16).unwrap_or(0);
+        let start = u64::from_str_radix(start_str, 16).unwrap_or(0);
+        let end = u64::from_str_radix(end_str, 16).unwrap_or(0);
 
         result.push(MemoryRegion {
-            base: start,
-            size: end - start,
+            base: crate::Address::new(start),
+            size: usize::try_from(end - start).map_err(|_| Error::AddressOverflow)?,
             protection: parse_protection(perms),
         });
     }

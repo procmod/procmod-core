@@ -1,10 +1,4 @@
-use procmod_core::{
-    hash_canonical_section, hash_mapped_section, read_mapped_pe, Architecture, Process,
-};
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
+use procmod_core::{read_mapped_pe, Architecture, Process};
 
 fn main() -> procmod_core::Result<()> {
     let pid = std::env::args()
@@ -37,23 +31,16 @@ fn main() -> procmod_core::Result<()> {
             identity.image_size,
             identity.checksum
         );
-        for section in identity
-            .sections
-            .iter()
-            .filter(|section| section.immutable())
-        {
-            let digest = hash_mapped_section(&process, section)?;
-            let canonical = hash_canonical_section(&process, &identity, section)?;
+        for section in &identity.sections {
             println!(
-                "  {} r{}x{} address={:#010x} virtual={:#x} mapped={:#x} sha256={} canonical={}",
+                "  {} r{}w{}x{} address={:#010x} virtual={:#x} mapped={:#x}",
                 section.name,
                 if section.readable { "+" } else { "-" },
+                if section.writable { "+" } else { "-" },
                 if section.executable { "+" } else { "-" },
                 section.address.value(),
                 section.virtual_size,
                 section.mapped_size,
-                hex(&digest),
-                hex(&canonical)
             );
         }
     }

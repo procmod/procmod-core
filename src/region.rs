@@ -1,8 +1,10 @@
+use crate::Address;
+
 /// A contiguous region of virtual memory in a process.
 #[derive(Debug, Clone)]
 pub struct MemoryRegion {
     /// Base address of the region.
-    pub base: usize,
+    pub base: Address,
 
     /// Size of the region in bytes.
     pub size: usize,

@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::module::Module;
 use crate::platform;
 use crate::region::MemoryRegion;
-use crate::{Address, Architecture};
+use crate::{Address, Architecture, Pointer32, Pointer64, PointerWidth};
 
 mod sealed {
     pub trait Sealed {}
@@ -41,16 +41,16 @@ impl Process<ReadWrite> {
     }
 
     /// Write a typed value to the target process at the given address.
-    pub fn write<T: Copy>(&self, address: usize, value: &T) -> Result<()> {
+    pub fn write<T: Copy>(&self, address: Address, value: &T) -> Result<()> {
         let buf = unsafe {
             std::slice::from_raw_parts(value as *const T as *const u8, std::mem::size_of::<T>())
         };
-        platform::write_bytes(&self.inner, address, buf)
+        platform::write_bytes(&self.inner, self.native_address(address)?, buf)
     }
 
     /// Write raw bytes to the target process.
-    pub fn write_bytes(&self, address: usize, bytes: &[u8]) -> Result<()> {
-        platform::write_bytes(&self.inner, address, bytes)
+    pub fn write_bytes(&self, address: Address, bytes: &[u8]) -> Result<()> {
+        platform::write_bytes(&self.inner, self.native_address(address)?, bytes)
     }
 }
 
@@ -88,21 +88,34 @@ impl<C: Capability> Process<C> {
     ///
     /// `T` must be valid for any bit pattern.
     pub unsafe fn read_at<T: Copy>(&self, address: Address) -> Result<T> {
-        let address = address.validate_for(self.architecture)?.value();
-        let address = usize::try_from(address).map_err(|_| crate::Error::AddressOutOfRange {
-            address,
-            architecture: self.architecture,
-        })?;
-        self.read(address)
+        let mut value = std::mem::MaybeUninit::<T>::uninit();
+        let buf =
+            std::slice::from_raw_parts_mut(value.as_mut_ptr() as *mut u8, std::mem::size_of::<T>());
+        platform::read_bytes(&self.inner, self.native_address(address)?, buf)?;
+        Ok(value.assume_init())
     }
 
     pub fn read_bytes_at(&self, address: Address, len: usize) -> Result<Vec<u8>> {
-        let address = address.validate_for(self.architecture)?.value();
-        let address = usize::try_from(address).map_err(|_| crate::Error::AddressOutOfRange {
-            address,
-            architecture: self.architecture,
-        })?;
-        self.read_bytes(address, len)
+        let mut buf = vec![0u8; len];
+        platform::read_bytes(&self.inner, self.native_address(address)?, &mut buf)?;
+        Ok(buf)
+    }
+
+    /// Read a pointer using the attached target's pointer width.
+    pub fn read_pointer(&self, address: Address) -> Result<Address> {
+        match self.architecture.pointer_width() {
+            Some(PointerWidth::Bits32) => {
+                let pointer: Pointer32 = unsafe { self.read_at(address)? };
+                Ok(pointer.address())
+            }
+            Some(PointerWidth::Bits64) => {
+                let pointer: Pointer64 = unsafe { self.read_at(address)? };
+                Ok(pointer.address())
+            }
+            None => Err(crate::Error::UnknownPointerWidth {
+                architecture: self.architecture,
+            }),
+        }
     }
 
     /// Read a typed value from the target process at the given address.
@@ -113,19 +126,21 @@ impl<C: Capability> Process<C> {
     /// `f32`, `[u8; N]`, etc.) are safe. Types with validity invariants (`bool`,
     /// `char`, enums, references) will cause undefined behavior if the remote
     /// memory contains an invalid representation.
-    pub unsafe fn read<T: Copy>(&self, address: usize) -> Result<T> {
-        let mut value = std::mem::MaybeUninit::<T>::uninit();
-        let buf =
-            std::slice::from_raw_parts_mut(value.as_mut_ptr() as *mut u8, std::mem::size_of::<T>());
-        platform::read_bytes(&self.inner, address, buf)?;
-        Ok(value.assume_init())
+    pub unsafe fn read<T: Copy>(&self, address: Address) -> Result<T> {
+        self.read_at(address)
     }
 
     /// Read raw bytes from the target process.
-    pub fn read_bytes(&self, address: usize, len: usize) -> Result<Vec<u8>> {
-        let mut buf = vec![0u8; len];
-        platform::read_bytes(&self.inner, address, &mut buf)?;
-        Ok(buf)
+    pub fn read_bytes(&self, address: Address, len: usize) -> Result<Vec<u8>> {
+        self.read_bytes_at(address, len)
+    }
+
+    fn native_address(&self, address: Address) -> Result<usize> {
+        let address = address.validate_for(self.architecture)?.value();
+        usize::try_from(address).map_err(|_| crate::Error::AddressOutOfRange {
+            address,
+            architecture: self.architecture,
+        })
     }
 
     /// List all loaded modules in the target process.

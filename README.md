@@ -14,7 +14,7 @@ Read and write memory in external processes on macOS, Linux, and Windows. Enumer
 
 ```toml
 [dependencies]
-procmod-core = "1"
+procmod-core = "2"
 ```
 
 ## Quick start
@@ -22,13 +22,13 @@ procmod-core = "1"
 Read a game's player health from a known memory address:
 
 ```rust
-use procmod_core::Process;
+use procmod_core::{Address, Process};
 
 fn main() -> procmod_core::Result<()> {
     let game = Process::attach(pid)?;
 
     // read the player's health at a known offset
-    let health: f32 = unsafe { game.read(0x7FF6_1A00_4200)? };
+    let health: f32 = unsafe { game.read(Address::new(0x7FF6_1A00_4200))? };
     println!("player health: {}", health);
 
     Ok(())

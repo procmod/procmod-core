@@ -13,14 +13,14 @@ pub enum Error {
 
     #[error("failed to read memory at {address:#x}")]
     ReadFailed {
-        address: usize,
+        address: u64,
         #[source]
         source: std::io::Error,
     },
 
     #[error("failed to write memory at {address:#x}")]
     WriteFailed {
-        address: usize,
+        address: u64,
         #[source]
         source: std::io::Error,
     },
@@ -57,6 +57,9 @@ pub enum Error {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("target pointer width is unknown for architecture {architecture:?}")]
+    UnknownPointerWidth { architecture: Architecture },
 }
 
 /// Result type alias for procmod-core operations.

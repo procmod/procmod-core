@@ -14,3 +14,15 @@ jobs:
       - run: cargo fmt -- --check
       - run: cargo clippy -- -D warnings
       - run: cargo test
+
+  windows-cross-bitness:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-pc-windows-msvc
+      - run: cargo build --example cross_bitness_child --target i686-pc-windows-msvc
+      - run: cargo test --test windows_cross_bitness
+        env:
+          PROC_MOD_X86_CHILD: ${{ github.workspace }}\target\i686-pc-windows-msvc\debug\examples\cross_bitness_child.exe
